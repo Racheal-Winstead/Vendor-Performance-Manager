@@ -4,3 +4,13 @@
 node_modules/
 .DS_Store
 __pycache__/
+
+# Local databases, uploads, and build artifacts
+data/
+uploads/
+*.sqlite
+*.sqlite-*
+*.db
+dist/
+coverage/
+*.log
