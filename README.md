@@ -71,14 +71,14 @@ CSV schema: `metric_name,actual_value,unit`. Each file covers one team and revie
 npm test
 ```
 
-24 tests cover quoted CSVs, malformed inputs, missing values, equality, minimum/maximum targets, and unassessed states. Browser checks cover sample loading, required targets, and pass/miss/unassessed output.
+29 tests cover quoted CSVs, malformed inputs, missing values, equality, minimum/maximum targets, and unassessed states, save/update round trips, corrupt storage, and quota/access failures. Browser checks cover sample loading, required targets, pass/miss/unassessed output, saving, refreshing, and restoring a review.
 
 ## Current limits
 
-This is a browser-local prototype. Data is kept in memory for this tab and is not saved after refresh. CSV contents and notes are not sent to a server. Google Fonts requests external font files only. The local HTTP server serves only explicitly allowed public assets, not `.env` or repository files.
+This is a browser-local prototype. Use Save review to store named drafts in browser localStorage, including metrics, targets, skipped states, dates, and notes. Open a saved review to restore it after refresh. Unsaved changes remain in memory only. Saved data is specific to this browser profile and origin (including port); clearing browser data removes it and it does not sync across computers. CSV contents and notes are not sent to a server. Google Fonts requests external font files only. The local HTTP server serves only explicitly allowed public assets, not `.env` or repository files.
 
-AI drafting, saved reviews, review approval, action tracking, accounts, and integrations are not implemented. No time-savings or business-value claim has been validated. The proposed backend and persistence stack in the PRD remain future decisions.
+AI drafting, review approval, action tracking, accounts, and integrations are not implemented. No time-savings or business-value claim has been validated. The proposed backend and persistence stack in the PRD remain future decisions.
 
 ## Status
 
-Upload and deterministic target-comparison milestone implemented on `codex/racheal`.
+Upload, deterministic target comparisons, and browser-local review saving implemented on `codex/racheal`.

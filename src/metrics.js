@@ -38,3 +38,23 @@ export function assessMetric(metric){
  const pass=metric.direction==='min'?actual>=target:actual<=target;
  return {status:pass?'met':'missed',gap:actual-target};
 }
+
+export const STORAGE_KEY='vendor-performance-reviews-v1';
+export function validateReview(r){
+ if(!r||typeof r.id!=='string'||typeof r.vendor!=='string'||typeof r.start!=='string'||typeof r.end!=='string'||typeof r.notes!=='string'||typeof r.updatedAt!=='string'||!Array.isArray(r.metrics)||r.metrics.length>100)throw Error('Saved review has an unsupported format.');
+ const metrics=r.metrics.map(m=>{
+  if(!m||typeof m.name!=='string'||typeof m.raw!=='string'||typeof m.unit!=='string'||typeof m.target!=='string'||!['min','max'].includes(m.direction)||typeof m.assess!=='boolean'||!Number.isInteger(m.row))throw Error('Saved metrics have an unsupported format.');
+  return {...m,actual:numeric(m.raw)};
+ });
+ return {...r,metrics};
+}
+export function readReviews(storage){
+ const raw=storage.getItem(STORAGE_KEY);if(!raw)return [];
+ const list=JSON.parse(raw);if(!Array.isArray(list))throw Error('Saved review library is not a list.');
+ return list.map(validateReview);
+}
+export function saveReview(storage,review){
+ const valid=validateReview(review),list=readReviews(storage);
+ const next=[valid,...list.filter(r=>r.id!==valid.id)];
+ storage.setItem(STORAGE_KEY,JSON.stringify(next));return next;
+}
