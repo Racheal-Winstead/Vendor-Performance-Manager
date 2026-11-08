@@ -20,7 +20,7 @@ async function withServer(fn, callModel) {
 }
 
 const review = {vendor: 'Acme', start: '2026-10-01', end: '2026-10-31',
-  metrics: [{row: 2, name: 'Quality', raw: '78', unit: 'percent', target: '85', direction: 'min', assess: true}],
+  metrics: [{row: 2, name: 'Quality', raw: '78', unit: 'percent', target: '85', direction: 'min', assess: true, unit_confirmed: true}],
   notes: ['Calls were late.']};
 
 test('finding accept and dismiss work over HTTP and persist', async () => {

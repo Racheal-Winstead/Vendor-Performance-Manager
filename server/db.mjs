@@ -22,7 +22,7 @@ export function openDb(path = process.env.DATABASE_PATH || './data/vendor-perfor
       id INTEGER PRIMARY KEY AUTOINCREMENT, review_id TEXT NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
       row INTEGER NOT NULL, name TEXT NOT NULL, raw TEXT NOT NULL, unit TEXT NOT NULL,
       target TEXT NOT NULL DEFAULT '', direction TEXT NOT NULL DEFAULT 'min' CHECK (direction IN ('min','max')),
-      assess INTEGER NOT NULL DEFAULT 1);
+      assess INTEGER NOT NULL DEFAULT 1, unit_confirmed INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE IF NOT EXISTS notes (
       id INTEGER PRIMARY KEY AUTOINCREMENT, review_id TEXT NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
       ref TEXT NOT NULL, text TEXT NOT NULL);
@@ -37,6 +37,10 @@ export function openDb(path = process.env.DATABASE_PATH || './data/vendor-perfor
       status TEXT NOT NULL DEFAULT 'Open' CHECK (status IN ('Open','In progress','Done')),
       created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
   `);
+  // Databases created before unit confirmation existed get the column added.
+  if (!db.prepare('PRAGMA table_info(metrics)').all().some(c => c.name === 'unit_confirmed')) {
+    db.exec('ALTER TABLE metrics ADD COLUMN unit_confirmed INTEGER NOT NULL DEFAULT 0');
+  }
   return db;
 }
 
@@ -70,9 +74,12 @@ export function createStore(db) {
     if (metrics) {
       run('DELETE FROM metrics WHERE review_id = ?', id);
       for (const m of metrics) {
-        run('INSERT INTO metrics (review_id,row,name,raw,unit,target,direction,assess) VALUES (?,?,?,?,?,?,?,?)',
-          id, m.row, req(m.name, 'Metric name'), String(m.raw ?? ''), req(m.unit, 'Metric unit'),
-          String(m.target ?? ''), m.direction === 'max' ? 'max' : 'min', m.assess === false ? 0 : 1);
+        const name = req(m.name, 'Metric name'), unit = req(m.unit, 'Metric unit');
+        const assess = m.assess === false ? 0 : 1, confirmed = m.unit_confirmed === true ? 1 : 0;
+        // PRD P0: the manager must confirm the target uses the metric's unit before it is assessed.
+        if (assess && !confirmed) throw new HttpError(400, `Confirm that the target for “${name}” uses ${unit}, or uncheck Assess.`);
+        run('INSERT INTO metrics (review_id,row,name,raw,unit,target,direction,assess,unit_confirmed) VALUES (?,?,?,?,?,?,?,?,?)',
+          id, m.row, name, String(m.raw ?? ''), unit, String(m.target ?? ''), m.direction === 'max' ? 'max' : 'min', assess, confirmed);
       }
     }
     if (notes) {
@@ -102,7 +109,7 @@ export function createStore(db) {
     getReview(id) {
       const review = getReviewRow(id);
       const metrics = all('SELECT * FROM metrics WHERE review_id = ? ORDER BY row', id).map(m => {
-        const m2 = {...m, assess: !!m.assess};
+        const m2 = {...m, assess: !!m.assess, unit_confirmed: !!m.unit_confirmed};
         return {...m2, ...assessMetric(m2)};
       });
       return {

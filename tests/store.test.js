@@ -4,8 +4,8 @@ import {openDb, createStore} from '../server/db.mjs';
 
 const mk = () => createStore(openDb(':memory:'));
 const base = {vendor: 'Acme', start: '2026-10-01', end: '2026-10-31',
-  metrics: [{row: 2, name: 'Quality', raw: '78', unit: 'percent', target: '85', direction: 'min', assess: true},
-            {row: 3, name: 'Missing', raw: '', unit: 'percent', target: '85', direction: 'min', assess: true}],
+  metrics: [{row: 2, name: 'Quality', raw: '78', unit: 'percent', target: '85', direction: 'min', assess: true, unit_confirmed: true},
+            {row: 3, name: 'Missing', raw: '', unit: 'percent', target: '85', direction: 'min', assess: true, unit_confirmed: true}],
   notes: ['Calls were late.']};
 
 test('create review runs deterministic checks and numbers notes', () => {
@@ -55,4 +55,15 @@ test('data survives reopening the database file', async () => {
     const again = createStore(openDb(file)).getReview(id);
     assert.equal(again.actions[0].status, 'In progress');
   } finally { rmSync(dir, {recursive: true, force: true}); }
+});
+
+test('assessed metric needs unit confirmation; unassessed does not', () => {
+  const s = mk();
+  const unconfirmed = {...base, metrics: [{...base.metrics[0], unit_confirmed: false}]};
+  assert.throws(() => s.createReview(unconfirmed), /Confirm that the target/);
+  const skipped = {...base, metrics: [{...base.metrics[0], unit_confirmed: false, assess: false}]};
+  assert.equal(s.createReview(skipped).metrics[0].status, 'unassessed');
+  const r = s.createReview(base);
+  assert.equal(r.metrics[0].unit_confirmed, true);
+  assert.throws(() => s.updateReview(r.id, {metrics: [{...base.metrics[0], unit_confirmed: false}]}), /Confirm that the target/);
 });
