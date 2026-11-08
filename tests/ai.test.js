@@ -37,6 +37,17 @@ test('rejects output containing a number not in the evidence', () => {
   assert.equal(v.rejected, 1);
 });
 
+test('drops causal claims and causal questions', () => {
+  const ev = evidenceOf(mk());
+  const v = verifyModelOutput(JSON.stringify({summary: 'Quality is 78.',
+    themes: [{text: 'Late calls were caused by staffing.', source_refs: ['N1']}],
+    questions: [{text: 'What caused the quality shortfall?', source_refs: ['M2']},
+                {text: 'Which Monday shifts had late calls?', source_refs: ['N1']}]}), ev);
+  assert.equal(v.themes.length, 0);
+  assert.deepEqual(v.questions.map(q => q.text), ['Which Monday shifts had late calls?']);
+  assert.equal(v.rejected, 2);
+});
+
 test('allows numbers that appear in the evidence', () => {
   const ev = evidenceOf(mk());
   const v = verifyModelOutput(JSON.stringify({summary: 'Quality was 78 percent against a target of 85.', themes: [], questions: []}), ev);

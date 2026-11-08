@@ -3,9 +3,9 @@ import {mkdirSync} from 'node:fs';
 import {dirname} from 'node:path';
 import {openDb, createStore} from './server/db.mjs';
 import {handleApi} from './server/api.mjs';
-import {anthropicClient} from './server/ai.mjs';
+import {defaultModelClient} from './server/ai.mjs';
 
-const callModel = anthropicClient(); // null when AI_API_KEY is empty
+const callModel = defaultModelClient(); // null when no AI key is set
 
 const dbPath = process.env.DATABASE_PATH || './data/vendor-performance.sqlite';
 mkdirSync(dirname(dbPath), {recursive: true});

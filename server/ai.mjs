@@ -50,6 +50,29 @@ export function anthropicClient({apiKey = process.env.AI_API_KEY, model = proces
   };
 }
 
+// Groq exposes an OpenAI-compatible chat endpoint. The key stays on the server.
+export function groqClient({apiKey = process.env.GROQ_API_KEY, model = process.env.AI_MODEL || 'openai/gpt-oss-120b', fetchImpl = fetch} = {}) {
+  if (!apiKey) return null;
+  return async (evidence) => {
+    const res = await fetchImpl('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {'content-type': 'application/json', authorization: `Bearer ${apiKey}`},
+      body: JSON.stringify({model, temperature: 0.2, max_tokens: 1200,
+        response_format: {type: 'json_object'},
+        messages: [{role: 'system', content: PROMPT},
+          {role: 'user', content: `<evidence>\n${JSON.stringify(evidence)}\n</evidence>`}]}),
+    });
+    if (!res.ok) throw new Error(`AI provider returned ${res.status}`);
+    const body = await res.json();
+    return body.choices?.[0]?.message?.content ?? '';
+  };
+}
+
+// Picks the configured provider. Groq is preferred when GROQ_API_KEY is set.
+export function defaultModelClient() {
+  return groqClient() ?? anthropicClient();
+}
+
 function parseModelJson(text) {
   const start = text.indexOf('{'), end = text.lastIndexOf('}');
   if (start < 0 || end < start) return null;
@@ -63,7 +86,9 @@ const normalise = n => String(Number(n));
 export function verifyModelOutput(raw, evidence) {
   const knownRefs = new Set([...evidence.metrics.map(m => m.ref), ...evidence.notes.map(n => n.ref)]);
   const knownNumbers = new Set(numbersIn(JSON.stringify(evidence)).map(normalise));
-  const numbersOk = text => numbersIn(text).every(n => knownNumbers.has(normalise(n)));
+  // PRD: never assert causes. Drop causal wording from model text outright.
+  const CAUSAL = /\b(caus\w*|because|due to|led to|results? in|driven by|contribut\w*|reason\w* for|root cause)\b/i;
+  const numbersOk = text => !CAUSAL.test(text) && numbersIn(text).every(n => knownNumbers.has(normalise(n)));
   const parsed = parseModelJson(raw);
   if (!parsed) return {ok: false, reason: 'unparseable', themes: [], questions: [], summary: null, rejected: 0};
 
