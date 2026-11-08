@@ -1,5 +1,6 @@
 import {HttpError} from './db.mjs';
 import {draftReview} from './ai.mjs';
+import {parseMetricsCsv, parseNotes} from './parse.mjs';
 
 const json = (res, status, body) => {
   res.writeHead(status, {'Content-Type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store'});
@@ -41,6 +42,10 @@ export async function handleApi(store, req, res, {callModel} = {}) {
         res.writeHead(200, {'Content-Type': 'text/markdown; charset=utf-8', 'Content-Disposition': 'attachment; filename="review.md"', 'X-Content-Type-Options': 'nosniff'});
         return res.end(md), true;
       } else if (sub === 'actions' && m === 'POST') return json(res, 201, store.createAction(id, await readBody(req))), true;
+    } else if (parts[0] === 'parse' && m === 'POST') {
+      const b = await readBody(req);
+      if (parts[1] === 'csv') return json(res, 200, {metrics: parseMetricsCsv(b.csv)}), true;
+      if (parts[1] === 'notes') return json(res, 200, {notes: parseNotes(b.text)}), true;
     } else if (parts[0] === 'findings' && parts[1] && m === 'PATCH') {
       const b = await readBody(req);
       return json(res, 200, store.setFindingState(parts[1], b.state)), true;
