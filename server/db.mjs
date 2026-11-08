@@ -153,6 +153,29 @@ export function createStore(db) {
       return L.join('\n') + '\n';
     },
 
+    // Replaces only unreviewed suggestions; accepted/dismissed decisions are kept.
+    replaceSuggestedFindings(reviewId, findings) {
+      getReviewRow(reviewId);
+      db.exec('BEGIN');
+      try {
+        run(`DELETE FROM findings WHERE review_id = ? AND state = 'suggested'`, reviewId);
+        for (const f of findings) {
+          run('INSERT INTO findings (id,review_id,kind,text,source_refs,state) VALUES (?,?,?,?,?,?)',
+            randomUUID(), reviewId, f.kind, f.text, JSON.stringify(f.source_refs), 'suggested');
+        }
+        db.exec('COMMIT');
+      } catch (e) { db.exec('ROLLBACK'); throw e; }
+      return all('SELECT * FROM findings WHERE review_id = ?', reviewId).map(f => ({...f, source_refs: JSON.parse(f.source_refs)}));
+    },
+
+    setFindingState(findingId, state) {
+      if (!['suggested', 'accepted', 'dismissed'].includes(state)) throw new HttpError(400, 'State must be suggested, accepted or dismissed.');
+      const f = one('SELECT * FROM findings WHERE id = ?', findingId);
+      if (!f) throw new HttpError(404, 'Finding not found.');
+      run('UPDATE findings SET state = ? WHERE id = ?', state, findingId);
+      return {...f, state, source_refs: JSON.parse(f.source_refs)};
+    },
+
     createAction(reviewId, body) {
       getReviewRow(reviewId);
       const a = validAction(body);

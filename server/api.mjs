@@ -1,4 +1,5 @@
 import {HttpError} from './db.mjs';
+import {draftReview} from './ai.mjs';
 
 const json = (res, status, body) => {
   res.writeHead(status, {'Content-Type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store'});
@@ -19,7 +20,7 @@ async function readBody(req) {
 }
 
 // Returns true if the request was handled (i.e. it was an /api route).
-export async function handleApi(store, req, res) {
+export async function handleApi(store, req, res, {callModel} = {}) {
   const url = new URL(req.url, 'http://localhost');
   if (!url.pathname.startsWith('/api/')) return false;
   const parts = url.pathname.split('/').filter(Boolean).slice(1); // after "api"
@@ -34,11 +35,15 @@ export async function handleApi(store, req, res) {
         if (m === 'GET') return json(res, 200, store.getReview(id)), true;
         if (m === 'PUT') return json(res, 200, store.updateReview(id, await readBody(req))), true;
       } else if (sub === 'approve' && m === 'POST') return json(res, 200, store.approveReview(id)), true;
+      else if (sub === 'draft' && m === 'POST') return json(res, 200, await draftReview(store, id, {callModel})), true;
       else if (sub === 'export' && m === 'GET') {
         const md = store.exportMarkdown(id);
         res.writeHead(200, {'Content-Type': 'text/markdown; charset=utf-8', 'Content-Disposition': 'attachment; filename="review.md"', 'X-Content-Type-Options': 'nosniff'});
         return res.end(md), true;
       } else if (sub === 'actions' && m === 'POST') return json(res, 201, store.createAction(id, await readBody(req))), true;
+    } else if (parts[0] === 'findings' && parts[1] && m === 'PATCH') {
+      const b = await readBody(req);
+      return json(res, 200, store.setFindingState(parts[1], b.state)), true;
     } else if (parts[0] === 'actions') {
       const id = parts[1];
       if (!id && m === 'GET') {
