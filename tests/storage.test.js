@@ -8,3 +8,36 @@ test('updating a review keeps other reviews and does not duplicate it',()=>{cons
 test('corrupt storage is never silently overwritten',()=>{let written=false;const storage={getItem:()=>'{bad',setItem:()=>written=true};assert.throws(()=>saveReview(storage,review('a')));assert.equal(written,false);});
 test('storage quota and access errors propagate',()=>{assert.throws(()=>saveReview({getItem:()=>null,setItem:()=>{throw Error('quota');}},review('a')),/quota/);assert.throws(()=>readReviews({getItem:()=>{throw Error('blocked');}}),/blocked/);});
 test('invalid saved data is rejected',()=>{assert.throws(()=>readReviews({getItem:()=>JSON.stringify([{id:'a'}])}));});
+
+test('a pre-check-in review opens with no recovery record', () => {
+ const storage = memory();
+ storage.setItem(STORAGE_KEY, JSON.stringify([review('older')]));
+ assert.equal(readReviews(storage)[0].recovery, null);
+});
+
+test('a recovery check-in keeps its original miss after review targets change', () => {
+ const storage = memory();
+ const original = review('a');
+ const recovery = {
+  metric: {...original.metrics[0], direction: 'min', assess: true},
+  vendor: original.vendor,
+  start: original.start,
+  end: original.end,
+  action: 'Review coaching notes',
+  owner: 'Team lead',
+  date: '2026-11-12',
+  latest: '',
+ };
+ saveReview(storage, {...original, recovery});
+ assert.deepEqual(readReviews(storage)[0].recovery, recovery);
+
+ const reopened = readReviews(storage)[0];
+ reopened.metrics[0].target = '75';
+ reopened.recovery.latest = '85';
+ saveReview(storage, reopened);
+ const [updated] = readReviews(storage);
+ assert.equal(updated.metrics[0].target, '75');
+ assert.equal(updated.recovery.metric.target, '85');
+ assert.equal(updated.recovery.metric.raw, '78');
+ assert.equal(updated.recovery.latest, '85');
+});

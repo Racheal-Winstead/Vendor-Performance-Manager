@@ -46,7 +46,19 @@ export function validateReview(r){
   if(!m||typeof m.name!=='string'||typeof m.raw!=='string'||typeof m.unit!=='string'||typeof m.target!=='string'||!['min','max'].includes(m.direction)||typeof m.assess!=='boolean'||!Number.isInteger(m.row))throw Error('Saved metrics have an unsupported format.');
   return {...m,actual:numeric(m.raw)};
  });
- return {...r,metrics};
+ const recovery = r.recovery ?? null;
+ if (recovery !== null) {
+  const {metric} = recovery;
+  const fields = ['vendor', 'start', 'end', 'action', 'owner', 'date', 'latest'];
+  if (!metric || typeof metric.name !== 'string' || typeof metric.unit !== 'string'
+   || typeof metric.raw !== 'string' || typeof metric.target !== 'string'
+   || metric.assess !== true || assessMetric(metric).status !== 'missed'
+   || fields.some(field => typeof recovery[field] !== 'string')
+   || (recovery.latest !== '' && numeric(recovery.latest) === null)) {
+   throw Error('Saved recovery check-in has an unsupported format.');
+  }
+ }
+ return {...r,metrics,recovery};
 }
 export function readReviews(storage){
  const raw=storage.getItem(STORAGE_KEY);if(!raw)return [];

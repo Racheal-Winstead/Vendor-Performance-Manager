@@ -1,9 +1,74 @@
 import {parseCSV,numeric,assessMetric,readReviews,saveReview} from './metrics.js';
 const $=id=>document.getElementById(id);
 let metrics=[],loadId=0,currentId=null,dirty=false;
+let recovery=null;
 const el=(tag,text,cls)=>{const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(cls)node.className=cls;return node;};
 function showError(id,message){$(id).textContent=message;$(id).hidden=!message;}
 function format(value,unit){return `${value}${unit==='percent'?'%':` ${unit}`}`;}
+const recoveryInputs = {
+ action: $('recovery-action'),
+ owner: $('recovery-owner'),
+ date: $('recovery-date'),
+ latest: $('recovery-value'),
+};
+
+function renderRecoveryResult() {
+ const {metric, latest} = recovery;
+ const actual = numeric(latest);
+ const result = assessMetric({...metric, raw: latest});
+ $('recovery-result').textContent = actual === null
+  ? 'Awaiting check-in'
+  : `${format(actual, metric.unit)} · ${result.status === 'met' ? 'Target met' : 'Target still missed'}`;
+}
+
+function renderRecovery() {
+ $('recovery-card').hidden = !recovery;
+ for (const button of $('result-rows').querySelectorAll('[data-recovery]')) {
+  button.disabled = Boolean(recovery);
+ }
+ if (!recovery) return;
+
+ const {metric, vendor, start, end} = recovery;
+ $('recovery-context').textContent = `${metric.name} · ${vendor} · ${start} — ${end}`;
+ $('recovery-original').textContent = format(numeric(metric.raw), metric.unit);
+ $('recovery-target').textContent = `${metric.direction === 'min' ? '≥' : '≤'} ${format(numeric(metric.target), metric.unit)}`;
+ $('recovery-unit').textContent = `(${metric.unit})`;
+ for (const [field, input] of Object.entries(recoveryInputs)) input.value = recovery[field];
+ renderRecoveryResult();
+}
+
+function startRecovery(metric) {
+ recovery = {
+  metric: {...metric},
+  vendor: $('vendor').value.trim(),
+  start: $('start').value,
+  end: $('end').value,
+  action: '',
+  owner: '',
+  date: '',
+  latest: '',
+ };
+ markDirty();
+ renderRecovery();
+ $('recovery-title').focus();
+}
+
+for (const [field, input] of Object.entries(recoveryInputs)) {
+ input.addEventListener('input', () => {
+  recovery[field] = input.value;
+  markDirty();
+  if (field === 'latest') renderRecoveryResult();
+ });
+}
+
+$('remove-recovery').addEventListener('click', () => {
+ if (!confirm('Remove the recovery check-in and its details from this review?')) return;
+ recovery = null;
+ markDirty();
+ renderRecovery();
+ ($('result-rows').querySelector('[data-recovery]') || $('back')).focus();
+});
+
 function renderPreview(){
  $('metric-rows').replaceChildren();$('preview').hidden=false;$('metric-count').textContent=`${metrics.length} metrics`;
  metrics.forEach((m,i)=>{
@@ -34,7 +99,20 @@ $('review-form').addEventListener('submit',e=>{
  const missing=metrics.find(m=>m.assess&&numeric(m.target)===null);if(missing){showError('form-error',`Enter a numeric target for “${missing.name}”, or uncheck Assess to leave it unassessed.`);return;}
  const results=metrics.map(m=>({...m,...assessMetric(m)}));
  $('summary-cards').replaceChildren();for(const [status,title]of [['met','Targets met'],['missed','Need attention'],['unassessed','Unassessed']]){const card=el('div',undefined,'summary-card');card.append(el('span',title),el('strong',String(results.filter(r=>r.status===status).length)));$('summary-cards').append(card);}
- $('result-rows').replaceChildren();for(const r of results){const tr=el('tr');const name=el('td');name.append(el('strong',r.name),el('small',`CSV row ${r.row}`));tr.append(name,el('td',r.actual===null?'Unavailable':format(r.actual,r.unit)));const target=el('td',r.status==='unassessed'?'Not assessed':`${r.direction==='min'?'≥':'≤'} ${format(numeric(r.target),r.unit)}`);tr.append(target);const status=el('td');status.append(el('span',{met:'Target met',missed:'Target missed',unassessed:'Unassessed'}[r.status],`status ${r.status}`));tr.append(status);$('result-rows').append(tr);}
+ $('result-rows').replaceChildren();for(const r of results){const tr=el('tr');const name=el('td');name.append(el('strong',r.name),el('small',`CSV row ${r.row}`));tr.append(name,el('td',r.actual===null?'Unavailable':format(r.actual,r.unit)));const target=el('td',r.status==='unassessed'?'Not assessed':`${r.direction==='min'?'≥':'≤'} ${format(numeric(r.target),r.unit)}`);tr.append(target);const status=el('td');status.append(el('span',{met:'Target met',missed:'Target missed',unassessed:'Unassessed'}[r.status],`status ${r.status}`));tr.append(status);
+  const followUp = el('td');
+  if (r.status === 'missed') {
+   const button = el('button', 'Start check-in', 'secondary');
+   button.type = 'button';
+   button.dataset.recovery = '';
+   button.setAttribute('aria-label', `Start check-in for ${r.name}`);
+   button.addEventListener('click', () => startRecovery(r));
+   followUp.append(button);
+  }
+  tr.append(followUp);
+  $('result-rows').append(tr);
+ }
+ renderRecovery();
  $('review-meta').textContent=`${$('vendor').value.trim()} · ${$('start').value} — ${$('end').value}`;$('result-notes').textContent=$('notes').value.trim();$('notes-card').hidden=!$('notes').value.trim();$('prepare-view').hidden=true;$('results-view').hidden=false;$('step-one').classList.remove('active');$('step-two').classList.add('active');$('page-title').textContent='Your numbers, in perspective.';$('page-description').textContent='Review the results. Keep interpretation and next steps in your hands.';$('crumb').textContent='Check performance';window.scrollTo(0,0);$('page-title').tabIndex=-1;$('page-title').focus();
 });
 $('back').addEventListener('click',()=>{$('prepare-view').hidden=false;$('results-view').hidden=true;$('step-one').classList.add('active');$('step-two').classList.remove('active');$('page-title').textContent='A clearer review starts here.';$('page-description').textContent='Bring your numbers and context together. Turn performance into a plan.';$('crumb').textContent='New review';window.scrollTo(0,0);$('vendor').focus();});
@@ -53,9 +131,15 @@ function library(selected=''){
 }
 $('save-review').addEventListener('click',()=>{
  if(!$('vendor').value.trim()){showError('save-error','Enter a vendor team name before saving. Draft targets and dates can remain incomplete.');$('vendor').focus();return;}
+ if (recovery && recoveryInputs.latest.validity.badInput) {
+  showError('save-error', 'Enter a valid check-in value or leave it blank.');
+  if ($('results-view').hidden) $('save-review').focus();
+  else recoveryInputs.latest.focus();
+  return;
+ }
  const id=currentId||crypto.randomUUID();
  try{
-  saveReview(localStorage,{id,vendor:$('vendor').value.trim(),start:$('start').value,end:$('end').value,notes:$('notes').value,metrics,updatedAt:new Date().toISOString()});
+  saveReview(localStorage,{id,vendor:$('vendor').value.trim(),start:$('start').value,end:$('end').value,notes:$('notes').value,metrics,recovery,updatedAt:new Date().toISOString()});
   currentId=id;dirty=false;library(id);$('save-status').textContent=`Saved on this computer at ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}. Other browsers and devices do not share these reviews.`;
  }catch{showError('save-error','This review could not be saved. Browser storage may be full, blocked, or unreadable. Keep this tab open; your current work is still here.');}
 });
@@ -64,7 +148,7 @@ $('open-review').addEventListener('click',()=>{
  if(dirty&&!confirm('Open the saved review and discard unsaved changes in this tab?'))return;
  try{
   const r=readReviews(localStorage).find(r=>r.id===id);if(!r)throw Error('Missing review');
-  loadId++;currentId=r.id;metrics=r.metrics;$('vendor').value=r.vendor;$('start').value=r.start;$('end').value=r.end;$('notes').value=r.notes;$('csv-file').value='';
+  loadId++;currentId=r.id;metrics=r.metrics;recovery=r.recovery;renderRecovery();$('vendor').value=r.vendor;$('start').value=r.start;$('end').value=r.end;$('notes').value=r.notes;$('csv-file').value='';
   if(metrics.length)renderPreview();else $('preview').hidden=true;
   $('file-status').textContent=`✓ ${metrics.length} saved metrics restored. You do not need to upload the CSV again.`;$('file-status').hidden=!metrics.length;
   showError('file-error','');showError('form-error','');showError('save-error','');$('back').click();dirty=false;
@@ -73,6 +157,6 @@ $('open-review').addEventListener('click',()=>{
 });
 $('new-review').addEventListener('click',()=>{
  if(dirty&&!confirm('Start a new review and discard unsaved changes?'))return;
- loadId++;currentId=null;metrics=[];$('review-form').reset();$('preview').hidden=true;$('file-status').hidden=true;showError('file-error','');showError('form-error','');showError('save-error','');$('back').click();dirty=false;$('saved-reviews').value='';$('save-status').textContent='New review. Save to keep it in this browser on this computer.';
+ loadId++;currentId=null;metrics=[];recovery=null;renderRecovery();$('review-form').reset();$('preview').hidden=true;$('file-status').hidden=true;showError('file-error','');showError('form-error','');showError('save-error','');$('back').click();dirty=false;$('saved-reviews').value='';$('save-status').textContent='New review. Save to keep it in this browser on this computer.';
 });
 library();

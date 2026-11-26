@@ -65,20 +65,28 @@ Open http://127.0.0.1:4175/. To use another port, run `PORT=4176 npm run dev`.
 
 CSV schema: `metric_name,actual_value,unit`. Each file covers one team and review period. Percent values use 78, not 78%. Sample data is fictional, not Google's actual performance data.
 
+## Recovery check-in demo
+
+1. Load the sample CSV and set the Quality audit score minimum to 85%. Enter targets or uncheck Assess for the other metrics.
+2. Check performance, then select **Start check-in** on the 78% miss. Record a corrective action, owner, and next check-in date. Select **Save review**.
+3. Reopen the saved review and select **Check performance**. Enter 82 to see the target is still missed, then enter 85 to see the target is met at this check-in. Save again to keep the latest result.
+
+Each review holds one recovery check-in. It keeps the original result and target from when the check-in was started. The workflow is based on the JD’s performance monitoring and mitigation follow-up duties. Whether consolidating this information saves managers time still needs role-holder validation.
+
 ## Verification
 
 ```bash
 npm test
 ```
 
-29 tests cover quoted CSVs, malformed inputs, missing values, equality, minimum/maximum targets, and unassessed states, save/update round trips, corrupt storage, and quota/access failures. Browser checks cover sample loading, required targets, pass/miss/unassessed output, saving, refreshing, and restoring a review.
+Tests cover quoted CSVs, malformed inputs, missing values, equality, minimum/maximum targets, and unassessed states, save/update round trips, corrupt storage, and quota/access failures. Browser checks cover sample loading, required targets, pass/miss/unassessed output, saving, refreshing, and restoring a review.
 
 ## Current limits
 
 This is a browser-local prototype. Use Save review to store named drafts in browser localStorage, including metrics, targets, skipped states, dates, and notes. Open a saved review to restore it after refresh. Unsaved changes remain in memory only. Saved data is specific to this browser profile and origin (including port); clearing browser data removes it and it does not sync across computers. CSV contents and notes are not sent to a server. Google Fonts requests external font files only. The local HTTP server serves only explicitly allowed public assets, not `.env` or repository files.
 
-AI drafting, review approval, action tracking, accounts, and integrations are not implemented. No time-savings or business-value claim has been validated. The proposed backend and persistence stack in the PRD remain future decisions.
+AI drafting, review approval, multi-action tracking, accounts, and integrations are not implemented. No time-savings or business-value claim has been validated. The proposed backend and persistence stack in the PRD remain future decisions.
 
 ## Status
 
-Upload, deterministic target comparisons, and browser-local review saving implemented on `codex/racheal`.
+Upload, deterministic target comparisons, browser-local review saving, and one recovery check-in per review.
